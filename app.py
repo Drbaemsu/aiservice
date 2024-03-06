@@ -35,7 +35,7 @@ def summarize_text(text):
 
     body = json.dumps({"text": text, "beam_size": 3})
     
-    response = requests.post(url, data=body, headers=headers, verify=False)
+    response = requests.post(url, data=body, headers=headers)
     
     if response.status_code == 200:
         try:
