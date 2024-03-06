@@ -4,7 +4,7 @@ import google.generativeai as genai
 
 # Google GenerativeAI 설정
 def configure_genai():
-    genai.configure(api_key="YOUR_API_KEY")
+    genai.configure(api_key="AIzaSyCr0VjXZqCdd0BR3nPCjCzmSgA9GJk4JfA")
     generation_config = {
         "temperature": 0.4,
         "top_p": 1,
