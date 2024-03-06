@@ -1,62 +1,59 @@
 import streamlit as st
-import json
-import requests
-from datetime import datetime
-import hmac
-import hashlib
-from pytz import timezone
+from pathlib import Path
+import google.generativeai as genai
 
-def generate_signature(client_id, client_secret):
-    # timestamp 생성
-    timestamp = datetime.now(timezone("Asia/Seoul")).strftime("%Y%m%d%H%M%S%f")[:-3] 
+# Google GenerativeAI 설정
+def configure_genai():
+    genai.configure(api_key="YOUR_API_KEY")
+    generation_config = {
+        "temperature": 0.4,
+        "top_p": 1,
+        "top_k": 32,
+        "max_output_tokens": 4096,
+    }
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    ]
+    model = genai.GenerativeModel(model_name="gemini-1.0-pro-vision-latest",
+                                  generation_config=generation_config,
+                                  safety_settings=safety_settings)
+    return model
 
-    # HMAC 기반 signature 생성
-    signature = hmac.new(
-        key=client_secret.encode("UTF-8"), msg=f"{client_id}:{timestamp}".encode("UTF-8"), digestmod=hashlib.sha256
-    ).hexdigest()
-    
-    return timestamp, signature
-
-def summarize_text(text):
-    client_id = "glabs_90c977135989838aecbed6b72387cfd1477a1b13e5c305967d9677afa3f7133c"
-    client_secret = "6d7b882c6a47197940391de3a031ba960cf9e8a2fb8fadc9ddc56a89c0734aa7"
-    client_key = "a2000a6b-66fb-548e-ace1-3cdde3a9cb71"
-
-    timestamp, signature = generate_signature(client_id, client_secret)
-
-    url = "https://aiapi.genielabs.ai/kt/nlp/summarize-news"
-    headers = {
-        "x-client-key": client_key,
-        "x-client-signature": signature,
-        "x-auth-timestamp": timestamp,
-        "Content-Type": "application/json",
-        "charset": "utf-8",
-    }  
-
-    body = json.dumps({"text": text, "beam_size": 3})
-    
-    response = requests.post(url, data=body, headers=headers, timeout=60)
-    
-    if response.status_code == 200:
-        try:
-            result = response.json()
-            return result["result"]["summary"] if "result" in result else "요약 결과가 없습니다."
-        except json.decoder.JSONDecodeError:
-            return "요약 결과를 가져오는 중 오류가 발생했습니다."
-    else:
-        return "요약 결과를 가져오는 중 오류가 발생했습니다."
-
+# Streamlit 웹 애플리케이션 설정
 def main():
-    st.title("텍스트 요약 프로그램")
-    
-    text_input = st.text_area("텍스트를 입력하세요", height=200)
-    if st.button("요약하기"):
-        if not text_input:
-            st.warning("입력된 텍스트가 없습니다.")
-        else:
-            summary_result = summarize_text(text_input)
-            st.subheader("요약 결과:")
-            st.write(summary_result)
+    st.title("이미지로 다양한 용도 제안하기")
+
+    model = configure_genai()
+
+    uploaded_file = st.file_uploader("이미지를 업로드하세요", type=["png", "jpg", "jpeg"])
+    if uploaded_file is not None:
+        # 이미지를 저장합니다.
+        with open("uploaded_image.png", "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        
+        # 이미지 검증
+        img_path = Path("uploaded_image.png")
+        if not img_path.exists():
+            st.error("이미지를 찾을 수 없습니다.")
+            return
+
+        image_parts = [
+            {"mime_type": uploaded_file.type, "data": img_path.read_bytes()},
+        ]
+
+        prompt_parts = [
+            "이미지의 물건을 다양한 용도를 제시해줘. 가장 기본적인 용도부터, 정말 이색적인 사용처도 제시해줘.",
+            image_parts[0],
+        ]
+
+        # Generative AI 모델을 사용해 콘텐츠 생성
+        response = model.generate_content(prompt_parts)
+        
+        # 결과 표시
+        st.write(response.text)
 
 if __name__ == "__main__":
     main()
